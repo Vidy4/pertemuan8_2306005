@@ -1,23 +1,95 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'models/post_model.dart';
-import 'models/photo_model.dart';
 import 'services/post_service.dart';
+import 'models/photo_model.dart';
 import 'services/photo_service.dart';
+import 'provider/post_provider.dart';
+import 'provider/photo_provider.dart';
+
+late Future<List<PostModel>> FuturePosts;
 
 void main() {
-  runApp(MaterialApp(
-    home: MyApp(),
-    title: "Pertemuan 8 - Post Content",
-  ));
+  FuturePosts = PostService.getPosts();
+
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => PostProvider()),
+        ChangeNotifierProvider(create: (_) => PhotoProvider()), // 🔥 tambahan
+      ],
+      child: MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: MainNavigation(),
+    );
+  }
+}
+
+class MainNavigation extends StatefulWidget {
+  @override
+  State<MainNavigation> createState() => _MainNavigationState();
+}
+
+class _MainNavigationState extends State<MainNavigation> {
+  int currentIndex = 0;
+
+  final List<Widget> pages = [PostPage(), GalleryPage()];
+
+  void onTap(int index) {
+    setState(() {
+      currentIndex = index;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: PostPage(),
+      extendBody: true,
+      body: pages[currentIndex],
+
+      bottomNavigationBar: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Container(
+          height: 70,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(30),
+            boxShadow: [
+              BoxShadow(
+                blurRadius: 20,
+                color: Colors.black.withOpacity(0.2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              IconButton(
+                icon: Icon(
+                  Icons.home,
+                  color: currentIndex == 0 ? Colors.blue : Colors.grey,
+                ),
+                onPressed: () => onTap(0),
+              ),
+              IconButton(
+                icon: Icon(
+                  Icons.image,
+                  color: currentIndex == 1 ? Colors.blue : Colors.grey,
+                ),
+                onPressed: () => onTap(1),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -28,228 +100,146 @@ class PostPage extends StatefulWidget {
 }
 
 class _PostPageState extends State<PostPage> {
-  late Future<List<PostModel>> futurePosts;
-  int _currentIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    futurePosts = PostService.getPosts();
-  }
-
-  Widget _buildNavButton(IconData icon, int index) {
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _currentIndex = index;
-        });
-      },
-      child: Container(
-        width: 80,
-        height: 80,
-        decoration: BoxDecoration(
-          color: Colors.deepPurple.shade50,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 4,
-              offset: Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Icon(
-          icon,
-          color: Colors.deepPurple,
-          size: 36,
-        ),
-      ),
-    );
+    Future.microtask(() {
+      context.read<PostProvider>().getPosts();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _currentIndex == 0 ? "Post Content" : "Daftar Foto",
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-          ),
-        ),
-        backgroundColor: Colors.blue,
+        title: Text("Daftar Post"),
+        backgroundColor: Colors.lightBlueAccent,
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: IndexedStack(
-              index: _currentIndex,
-              children: [
-                // Halaman Home
-                FutureBuilder<List<PostModel>>(
-                  future: futurePosts,
-                  builder: (context, snapshot) {
-                    if (snapshot.hasData) {
-                      final posts = snapshot.data!;
-                      return ListView.builder(
-                        itemCount: posts.length,
-                        itemBuilder: (context, index) {
-                          final post = posts[index];
-                          return Card(
-                            child: Padding(
-                              padding: EdgeInsets.all(10),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    post.title,
-                                    style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  SizedBox(height: 10),
-                                  Text(post.body),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      );
-                    } else if (snapshot.hasError) {
-                      return Center(child: Text('Error: ${snapshot.error}'));
-                    } else {
-                      return Center(child: CircularProgressIndicator());
-                    }
-                  },
-                ),
+      body: FutureBuilder<List<PostModel>>(
+        future: FuturePosts,
+        builder: (context, snapshot) {
+          if (snapshot.hasData) {
+            final posts = snapshot.data!;
 
-                // Halaman Foto
-                PhotoGalleryPage(),
-              ],
-            ),
-          ),
+            return ListView.builder(
+              padding: EdgeInsets.all(12),
+              itemCount: posts.length,
+              itemBuilder: (context, index) {
+                final post = posts[index];
 
-          // Bottom Navigation
-          Container(
-            padding: EdgeInsets.symmetric(vertical: 12, horizontal: 40),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              border: Border(top: BorderSide(color: Colors.grey.shade300)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildNavButton(Icons.home, 0),
-                _buildNavButton(Icons.photo_library, 1),
-              ],
-            ),
-          ),
-        ],
+                return Card(
+                  margin: EdgeInsets.only(bottom: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          post.title,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(post.body),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            );
+          } else if (snapshot.hasError) {
+            return Center(child: Text("Error"));
+          }
+          return Center(child: CircularProgressIndicator());
+        },
       ),
     );
   }
 }
 
-// Halaman Gallery Foto
-class PhotoGalleryPage extends StatefulWidget {
+class GalleryPage extends StatefulWidget {
   @override
-  State<PhotoGalleryPage> createState() => _PhotoGalleryPageState();
+  State<GalleryPage> createState() => _GalleryPageState();
 }
 
-class _PhotoGalleryPageState extends State<PhotoGalleryPage> {
-  late Future<List<PhotoModel>> futurePhotos;
+class _GalleryPageState extends State<GalleryPage> {
 
   @override
   void initState() {
     super.initState();
-    futurePhotos = PhotoService.getPhotos();
+
+    Future.microtask(() {
+      context.read<PhotoProvider>().fetchPhotos();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<PhotoModel>>(
-      future: futurePhotos,
-      builder: (context, snapshot) {
-        if (snapshot.hasData) {
-          final photos = snapshot.data!;
+    final provider = context.watch<PhotoProvider>();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("Daftar Foto"),
+        backgroundColor: Colors.greenAccent,
+      ),
+      body: Builder(
+        builder: (_) {
+          if (provider.isLoading) {
+            return Center(child: CircularProgressIndicator());
+          }
+
+          if (provider.errorMessage.isNotEmpty) {
+            return Center(child: Text(provider.errorMessage));
+          }
+
+          final photos = provider.photos;
+
           return ListView.builder(
-            padding: EdgeInsets.all(10),
+            padding: EdgeInsets.all(12),
             itemCount: photos.length,
             itemBuilder: (context, index) {
               final photo = photos[index];
+
               return Card(
-                elevation: 3,
                 margin: EdgeInsets.only(bottom: 12),
-                child: Padding(
-                  padding: EdgeInsets.all(10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.all(10),
+                      child: Text(
                         photo.author,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
+                        style: TextStyle(fontWeight: FontWeight.bold),
                       ),
-                      SizedBox(height: 8),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
+                    ),
+                    AspectRatio(
+                      aspectRatio: photo.width / photo.height,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.vertical(
+                          bottom: Radius.circular(12),
+                        ),
                         child: Image.network(
                           photo.downloadUrl,
-                          width: double.infinity,
                           fit: BoxFit.cover,
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return SizedBox(
-                              height: 200,
-                              child: Center(child: CircularProgressIndicator()),
-                            );
-                          },
-                          errorBuilder: (context, error, stackTrace) {
-                            return Center(
-                              child: Icon(
-                                Icons.broken_image,
-                                size: 50,
-                                color: Colors.grey,
-                              ),
-                            );
-                          },
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               );
             },
           );
-        } else if (snapshot.hasError) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.error, size: 64, color: Colors.red),
-                SizedBox(height: 16),
-                Text('Error: ${snapshot.error}'),
-                SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      futurePhotos = PhotoService.getPhotos();
-                    });
-                  },
-                  child: Text('Coba Lagi'),
-                ),
-              ],
-            ),
-          );
-        } else {
-          return Center(child: CircularProgressIndicator());
-        }
-      },
+        },
+      ),
     );
   }
 }
